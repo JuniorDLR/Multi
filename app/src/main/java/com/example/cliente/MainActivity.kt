@@ -1,10 +1,12 @@
 package com.example.cliente
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.util.Log
 import okhttp3.ResponseBody
 import android.widget.Button
@@ -15,6 +17,7 @@ import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.create
+import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Multipart
@@ -74,12 +77,12 @@ class MainActivity : AppCompatActivity() {
 
     interface ApiService {
         @Multipart
-        @POST("multimedia2.php")
+        @POST("multimedia/multimedia2.php")
         suspend fun enviarArchivos(@Part files: List<MultipartBody.Part>): ResponseBody
     }
 
     object RetrofitClient {
-        private const val BASE_URL = "http://127.0.0.1:80/multimedia/"
+        private const val BASE_URL = "http://10.0.2.2:80/"
         private val client = OkHttpClient.Builder().build()
 
         val apiService: ApiService = Retrofit.Builder()
@@ -92,11 +95,13 @@ class MainActivity : AppCompatActivity() {
 
     fun EnviarDatos() {
         val files = mutableListOf<MultipartBody.Part>()
+
         for (uri in uris) {
-            val file = File(uri.path!!)
-            val requestFile = file.asRequestBody("multipart/form-data".toMediaTypeOrNull())
-            val part = MultipartBody.Part.createFormData("file[]", file.name, requestFile)
+            val inputStream = contentResolver.openInputStream(uri)
+            val requestBody = inputStream!!.readBytes().toRequestBody("multipart/form-data".toMediaTypeOrNull())
+            val part = MultipartBody.Part.createFormData("file[]", getFileName(uri), requestBody)
             files.add(part)
+            inputStream.close()
         }
 
         CoroutineScope(Dispatchers.IO).launch {
@@ -114,25 +119,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    // Función auxiliar para obtener el nombre de archivo de una URI
+    @SuppressLint("Range")
+    private fun getFileName(uri: Uri): String {
+        var result: String? = null
+        if (uri.scheme == "content") {
+            val cursor = contentResolver.query(uri, null, null, null, null)
+            cursor.use {
+                if (it != null && it.moveToFirst()) {
+                    result = it.getString(it.getColumnIndex(OpenableColumns.DISPLAY_NAME))
+                }
+            }
+        }
+        return result ?: uri.lastPathSegment ?: "file"
+    }
 
 
 
